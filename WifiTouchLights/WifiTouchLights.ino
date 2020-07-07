@@ -8,17 +8,17 @@
 
 // Update these with values suitable for your network.
 
-const char* ssidAP = "ESP8266";
-const char* passAP = "portal";
+const char* ssidAP = "AutoConnectAP";
+const char* passAP = "password";
 const char* mqtt_server = "io.adafruit.com";
-const char* user = "ZeroState"; //adafruit username
-const char* key = "aio_Tpxh7187ZsKC0v0lGakfJN0TWf7k"; //AIO key
+const char* user = "user"; //adafruit username
+const char* key = "key"; //AIO key
 
-const char* subTopic = "ZeroState/feeds/lightmanager.lightcolor"; //format: username/feeds/feedName
-const char* getTopic = "ZeroState/feeds/lightmanager.lightcolor/get"; //format: username/feeds/feedName/get (get returns last value to subscribers on publish)
+const char* subTopic = "user/feeds/lightcolor"; //format: username/feeds/feedName
+const char* getTopic = "user/feeds/lightcolor/get"; //format: username/feeds/feedName/get (get returns last value to subscribers on publish)
 //https://io.adafruit.com/api/docs/mqtt.html#using-the-get-topic
 
-#define pixelPin D4
+#define pixelPin D2
 #define pixelNum 16
 #define pixelBrightness 50 //out of 255
 
@@ -33,7 +33,7 @@ bool firstTouch = false;
 
 Adafruit_NeoPixel leds(pixelNum, pixelPin, NEO_GRB + NEO_KHZ800);
 CapacitiveSensor   touchSensor = CapacitiveSensor(D6,D7);
-// 470K resistor between first pin (after resistors) and second pin (before resistors, direct to sensor)
+// 470K resistor between first pin (after resistor) and second pin (before resistor, direct to sensor)
 
 WiFiClient espClient;
 PubSubClient client(espClient);
@@ -42,9 +42,8 @@ unsigned long lastMsg = 0;
 char msg[MSG_BUFFER_SIZE];
 int value = 0;
 
-uint32_t r;
-uint32_t g;
-uint32_t b;
+int rgb[3];
+double lastColor[3] = {0,0,0};
 
 void callback(char* topic, byte* payload, unsigned int length) {
   Serial.print("Message arrived [");
@@ -66,20 +65,30 @@ void callback(char* topic, byte* payload, unsigned int length) {
       colors += data[x];
       x++;
     }
-    if (i == 0) r = colors.toInt();
-    else if (i == 1) g = colors.toInt();
-    else if (i == 2) b = colors.toInt();
+    if (i == 0) {
+      rgb[0] = colors.toInt();
+    }
+    else if (i == 1) {
+      rgb[1] = colors.toInt();
+    }
+    else if (i == 2) {
+      rgb[2] = colors.toInt();
+    }
     x++;
   }
   Serial.print("r: ");
-  Serial.println(r);
+  Serial.println(rgb[0]);
   Serial.print("g: ");
-  Serial.println(g);
+  Serial.println(rgb[1]);
   Serial.print("b: ");
-  Serial.println(b);
+  Serial.println(rgb[2]);
+
 
   //set NeoPixels to color
-  colorWipe(leds.Color(r, g, b), 50);
+  fadeColor(lastColor,rgb,40);
+
+  //colorWipe(leds.Color(r, g, b), 50);
+  initTime = millis();
 
 
 }
@@ -122,16 +131,17 @@ void setup() {
   if(!wm.autoConnect(ssidAP, passAP)) {
         Serial.println("Failed to connect to Wifi");
         errorStatus();
-        // ESP.restart();
+        //ESP.restart();
   } 
     else {
         //if you get here you have connected to the WiFi    
         Serial.println("Wifi Connected");
-        colorWipe(leds.Color(0,   255,   0), 50); // Green
+        int green[3] = {0,255,0};
+        fadeColor(lastColor,green,15);
+
+        client.setServer(mqtt_server, 1883);
+        client.setCallback(callback);
     }
-  
-  client.setServer(mqtt_server, 1883);
-  client.setCallback(callback);
 }
 
 void loop() {
@@ -148,7 +158,7 @@ void loop() {
       initTime = millis(); 
     } else if (firstTouch == true){
        timeTouched = millis() - initTime; //measure time touched as a threshold to change color
-       if (timeTouched > 1500) { //must be touched for 1500ms to change color
+       if (timeTouched > 1750) { //must be touched for 1500ms to change color
          changeColor();
          firstTouch = false;
          initTime = 0;
@@ -169,10 +179,12 @@ void loop() {
 
 void errorStatus(){
   for (int i=0; i<5; i++) {
+  colorWipe(leds.Color(255,  0,   0), 0); // Red
   digitalWrite(LED_BUILTIN, HIGH);
-  delay(75);
+  delay(150);
+  colorWipe(leds.Color(0,  0,   0), 0); // Red
   digitalWrite(LED_BUILTIN, LOW);
-  delay(75);
+  delay(150);
   }
 }
 
@@ -216,8 +228,36 @@ void colorWipe(uint32_t color, int wait) {
   }
 }
 
-void fadeBrightness(int fromBright, int toBright){
-  int smooth = 10;
+void fadeColor(double fromColor[3], int tC[3], int wait){
+  int smooth = 25;
+  double toColor[3];
+  for (int i = 0; i < 3; i++){
+    toColor[i] = (double)tC[i];
+  }
+  long dR = (toColor[0] - fromColor[0]) / smooth;
+  long dG = (toColor[1] - fromColor[1]) / smooth;
+  long dB = (toColor[2] - fromColor[2]) / smooth;
+  for (int i = 0; i < smooth; i++){
+    fromColor[0] += dR;
+    fromColor[1] += dG;
+    fromColor[2] += dB;
+    Serial.println(fromColor[0]);
+    Serial.println(fromColor[1]);
+    Serial.println(fromColor[2]);
+    for (int x = 0; x < pixelNum; x++) {
+    leds.setPixelColor(x, leds.Color((uint32_t)fromColor[0], (uint32_t)fromColor[1], (uint32_t)fromColor[2]));
+    }
+    leds.show();                          //  Update strip to match
+    delay(wait);   
+  }
+
+    for (int i = 0; i < 3; i++){
+    lastColor[i] = (double)fromColor[i];
+  }
+}
+ 
+
+void fadeBrightness(int fromBright, int toBright, int smooth){
   double increment = (toBright - fromBright) / smooth;
   for (int i = 0; i < smooth; i++){
     fromBright += increment;
@@ -225,5 +265,5 @@ void fadeBrightness(int fromBright, int toBright){
     leds.show();
     delay(15);
   }
-  
 }
+
