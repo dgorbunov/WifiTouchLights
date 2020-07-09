@@ -1,30 +1,38 @@
-//Globally Synchronized Wifi Touch Light Code for ESP8266
-//Written by Daniel Gorbunov off of PubSubClient example code.
+/*
+ * Globally Synchronized Wifi Touch Light Code for ESP8266
+ * Written by Daniel Gorbunov using open source libraries:
+ * PubSubClient, WifiManager, Neopixel, CapacitveSensing
+ * Uses MQTT to connect to Adafruit IO or any other cloud broker.
+*/
+
 #include <ESP8266WiFi.h>
 #include <PubSubClient.h>
 #include <WiFiManager.h>
 #include <Adafruit_NeoPixel.h>
 #include <CapacitiveSensor.h>
 
-// Update these with values suitable for your network.
-
+/* WM AP PARAMS */
 const char* ssidAP = "AutoConnectAP";
-const char* passAP = "password";
-const char* mqtt_server = "io.adafruit.com";
-const char* user = "user"; //adafruit username
-const char* key = "key"; //AIO key
+const char* passAP = "portal1234";
 
-const char* subTopic = "user/feeds/lightcolor"; //format: username/feeds/feedName
-const char* getTopic = "user/feeds/lightcolor/get"; //format: username/feeds/feedName/get (get returns last value to subscribers on publish)
+/* MQTT PARAMS */
+const char* mqtt_server = "io.adafruit.com";
+const char* user = "ZeroState"; //adafruit username
+const char* key = "aio_Tpxh7187ZsKC0v0lGakfJN0TWf7k"; //AIO key
+const char* subTopic = "ZeroState/feeds/lightmanager.lightcolor"; //username/feeds/feedName
+const char* getTopic = "ZeroState/feeds/lightmanager.lightcolor/get"; //subTopic + /get (get returns last value on publish)
 //https://io.adafruit.com/api/docs/mqtt.html#using-the-get-topic
 
+/* NEOPIXEL PARAMS */
 #define pixelPin D2
 #define pixelNum 16
-#define pixelBrightness 50 //out of 255
+#define pixelBrightness 255 //out of 255
 
-#define sens 6 //sensitivity (product factor, must be >1, higher = less sensitive)
-#define distance 75  //distance size, higher = less stability
-#define samples 150 //# calibration samples
+/* CAPACITIVE TOUCH PARAMS */
+#define sens 3.5 //sensitivity (product factor, must be >1, higher = less sensitive)
+#define distance 1000  //distance size, higher = less stability
+#define samples 200 //num. calibration samples
+#define touchTime 1200 //time touched until color change in ms
 
 long thres = 0;
 long timeTouched;
@@ -32,8 +40,12 @@ long initTime;
 bool firstTouch = false;
 
 Adafruit_NeoPixel leds(pixelNum, pixelPin, NEO_GRB + NEO_KHZ800);
+
 CapacitiveSensor   touchSensor = CapacitiveSensor(D6,D7);
-// 470K resistor between first pin (after resistor) and second pin (before resistor, direct to sensor)
+/* 
+ *  470K resistor between first pin (after resistor)
+ * and second pin (before resistor, direct to sensor)
+ */
 
 WiFiClient espClient;
 PubSubClient client(espClient);
@@ -158,13 +170,13 @@ void loop() {
       initTime = millis(); 
     } else if (firstTouch == true){
        timeTouched = millis() - initTime; //measure time touched as a threshold to change color
-       if (timeTouched > 1750) { //must be touched for 1500ms to change color
+       if (timeTouched > touchTime) { //must be touched for touchTime ms to change color
          changeColor();
          firstTouch = false;
          initTime = 0;
        } 
       }
-    digitalWrite(LED_BUILTIN, LOW); //inverted on my esp8266, this turns led on
+    digitalWrite(LED_BUILTIN, LOW); //inverted on my WeMos, this turns led on
     Serial.print("touched: ");
     Serial.println(reading);
 
@@ -200,16 +212,18 @@ void calibrateTouch(int readings){
 }
 
 void changeColor(){
+  randomSeed(micros());
   Serial.println("CHANGING GLOBAL COLOR");
-  String message = ""; //= ""?
+  String message = "";
   int randRGB;
-  for (int x = 0; x < 3; x++){
-  randRGB = random(0,255); //randomSeed()?
-  if (x != 2){
-    message += randRGB;
-    message += ",";
-  }
-  else message += randRGB;
+  int randomZero = random(0,2);
+  for (int x = 0; x < 3; x++){ //send payload as R,G,B
+//    randRGB = random(0,255); //randomSeed()?
+    randRGB = (x != randomZero)? random(0,150):0; 
+    if (x != 2){
+      message += randRGB;
+      message += ",";
+    } else message += randRGB;
   }
   Serial.println("Sending payload: ");
   Serial.println(message);
@@ -266,4 +280,3 @@ void fadeBrightness(int fromBright, int toBright, int smooth){
     delay(15);
   }
 }
-
