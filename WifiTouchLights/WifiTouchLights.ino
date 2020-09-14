@@ -13,14 +13,14 @@
 
 /* WM AP PARAMS */
 const char* ssidAP = "AutoConnectAP";
-const char* passAP = "portal1234";
+const char* passAP = "password";
 
 /* MQTT PARAMS */
 const char* mqtt_server = "io.adafruit.com";
-const char* user = "ZeroState"; //adafruit username
-const char* key = "aio_Tpxh7187ZsKC0v0lGakfJN0TWf7k"; //AIO key
-const char* subTopic = "ZeroState/feeds/lightmanager.lightcolor"; //username/feeds/feedName
-const char* getTopic = "ZeroState/feeds/lightmanager.lightcolor/get"; //subTopic + /get (get returns last value on publish)
+const char* user = "username"; //adafruit username
+const char* key = "key"; //AIO key
+const char* subTopic = "user/feeds/lightmanager.lightcolor"; //username/feeds/feedName
+const char* getTopic = "user/feeds/lightmanager.lightcolor/get"; //subTopic + /get (get returns last value on publish)
 //https://io.adafruit.com/api/docs/mqtt.html#using-the-get-topic
 
 /* NEOPIXEL PARAMS */
